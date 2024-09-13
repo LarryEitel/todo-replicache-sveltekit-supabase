@@ -16,7 +16,7 @@
 	</p>
 	<p>Not officially a part of <a href="http://todomvc.com">TodoMVC</a></p>
 	<p>
-		Source code avaliable on <a href="https://github.com/isaacHagoel/todo-replicache-sveltekit"
+		Source code avaliable on <a href="https://github.com/LarryEitel/todo-replicache-sveltekit-supabase"
 			>github</a
 		>
 	</p>
