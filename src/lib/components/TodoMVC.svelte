@@ -87,7 +87,7 @@
 <svelte:window on:hashchange={updateView} />
 
 <header class="header">
-	<h1>todos</h1>
+	<h1>Todos</h1>
 	<!-- svelte-ignore a11y-autofocus -->
 	<input class="new-todo" on:keydown={createNew} placeholder="What needs to be done?" autofocus />
 </header>
