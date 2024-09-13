@@ -40,6 +40,7 @@
 	},
 	"type": "module",
 	"dependencies": {
+		"@supabase/supabase-js": "^2.45.4",
 		"nanoid": "^5.0.7",
 		"replicache": "^15.1.0",
 		"replicache-transaction": "^0.4.0",

@@ -4,8 +4,8 @@
 	import { createClient } from '@supabase/supabase-js';
 	import type { M } from '$lib/replicache/mutators';
 
-	const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-	const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+	const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+	const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
 	let rep: Replicache<M>;
 	let count = 0;
@@ -44,10 +44,20 @@
 			.subscribe();
 	});
 
-	function handleRealtimeChange(payload: any) {
+	async function handleRealtimeChange(payload: any) {
 		const { eventType, new: newRecord } = payload;
 		if (eventType === 'UPDATE' && newRecord && newRecord.value !== undefined) {
 			rep.mutate.set(newRecord.value);
+			await sendPoke();
+		}
+	}
+
+	async function sendPoke() {
+		const response = await fetch('/api/replicache/poke', {
+			method: 'POST',
+		});
+		if (!response.ok) {
+			console.error('Failed to send poke:', await response.text());
 		}
 	}
 
@@ -95,5 +105,4 @@
 		font-size: 1.5rem;
 		padding: 0.5rem 1rem;
 	}
-
 </style>
