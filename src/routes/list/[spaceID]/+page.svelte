@@ -7,17 +7,18 @@
 	import { page } from '$app/stores';
 	import { listTodos } from '$lib/replicache/todo';
 	import type { Todo } from '$lib/replicache/todo';
+	import { createClient } from "@supabase/supabase-js";
 
 	import TodoMVC from '$lib/components/TodoMVC.svelte';
 
 	const { spaceID } = $page.params;
-	let replicacheInstance: Replicache<M>;
+	let repl: Replicache<M>;
 	let _list: Todo[] = [];
 	let areAllChangesSaved = true;
 
 	onMount(() => {
-		replicacheInstance = initReplicache(spaceID);
-		replicacheInstance.subscribe(listTodos, (data) => {
+		repl = initReplicache(spaceID);
+		repl.subscribe(listTodos, (data) => {
 			_list = data;
 			_list.sort((a: Todo, b: Todo) => a.sort - b.sort);
 		});
@@ -26,22 +27,26 @@
 		const connection = source(`/api/replicache/${spaceID}/poke`);
 		const sseStore = connection.select('poke').transform(() => {
 			console.log('poked! pulling fresh data for spaceID', spaceID);
-			replicacheInstance.pull();
+			repl.pull();
 		});
 		// The line below are kinda dumb, it prevents Svelte from removing this store at compile time (since it has not subscribers)
 		const unsubscribe = sseStore.subscribe(() => {});
 
 		// This allows us to show the user whether all their local data is saved on the server
-		replicacheInstance.onSync = async () => {
-			areAllChangesSaved = (await replicacheInstance.experimentalPendingMutations()).length === 0;
+		repl.onSync = async () => {
+			areAllChangesSaved = (await repl.experimentalPendingMutations()).length === 0;
 		};
+
+    const unlisten = listen(async () => repl.pull());
 
 		// cleanup
 		return () => {
-			replicacheInstance.close();
+			repl.close();
 			unsubscribe();
 			connection.close();
+      unlisten();
 		};
+
 	});
 
 	function initReplicache(spaceID: string) {
@@ -59,12 +64,41 @@
 	}
 
 	async function createTodo(text: string) {
-		await replicacheInstance?.mutate.createTodo({
+		await repl?.mutate.createTodo({
 			id: nanoid(),
 			text,
 			completed: false
 		});
 	}
+
+
+// Implements a Replicache poke using Supabase's realtime functionality.
+// See: backend/poke/supabase.ts.
+function listen(onPoke: () => Promise<void>) {
+  const supabase = createClient(
+		import.meta.env.VITE_SUPABASE_URL,
+		import.meta.env.VITE_SUPABASE_ANON_KEY
+	);
+
+  const subscriptionChannel = supabase.channel("public:replicache_space");
+  subscriptionChannel
+    .on(
+      "postgres_changes",
+      {
+        event: "*",
+        schema: "public",
+        table: "replicache_space",
+      },
+      () => {
+        void onPoke();
+      }
+    )
+    .subscribe();
+  return () => {
+    void supabase.removeChannel(subscriptionChannel);
+  };
+}
+
 </script>
 
 <p>{areAllChangesSaved ? 'All Data Saved' : 'Sync Pending'}</p>
@@ -72,7 +106,7 @@
 	<TodoMVC
 		items={_list}
 		onCreateItem={createTodo}
-		onDeleteItem={(id) => replicacheInstance.mutate.deleteTodo(id)}
-		onUpdateItem={(updatedTodo) => replicacheInstance.mutate.updateTodo(updatedTodo)}
+		onDeleteItem={(id) => repl.mutate.deleteTodo(id)}
+		onUpdateItem={(updatedTodo) => repl.mutate.updateTodo(updatedTodo)}
 	/>
 </section>
