@@ -26,21 +26,39 @@
 // required to get up and running.
 
 import type { WriteTransaction } from 'replicache';
+import { listTodos } from './todo';
+import type { Todo, TodoUpdate } from './todo';
 
 export type M = typeof mutators;
 
 export const mutators = {
-	increment: async (tx: WriteTransaction) => {
-		const current = (await tx.get<number>('counter')) ?? 0;
-		await tx.set('counter', current + 1);
+	updateTodo: async (tx: WriteTransaction, update: TodoUpdate) => {
+		// In a real app you may want to validate the incoming data is in fact a
+		// TodoUpdate. Check out https://www.npmjs.com/package/@rocicorp/rails for
+		// some helper functions to do this.
+		const prev = await tx.get<Todo>(`todo/${update.id}`);
+		const next = { ...prev, ...update };
+		await tx.set(`todo/${next.id}`, next);
 	},
 
-	decrement: async (tx: WriteTransaction) => {
-		const current = (await tx.get<number>('counter')) ?? 0;
-		await tx.set('counter', current - 1);
+	deleteTodo: async (tx: WriteTransaction, id: string) => {
+		await tx.del(`todo/${id}`);
 	},
 
-	set: async (tx: WriteTransaction, value: number) => {
-		await tx.set('counter', value);
+	// This mutator creates a new todo, assigning the next available sort value.
+	//
+	// If two clients create new todos concurrently, they both might choose the
+	// same sort value locally (optimistically). That's fine because later when
+	// the mutator re-runs on the server the two todos will get unique values.
+	//
+	// Replicache will automatically sync the change back to the clients,
+	// reconcile any changes that happened client-side in the meantime, and update
+	// the UI to reflect the changes.
+	createTodo: async (tx: WriteTransaction, todo: Omit<Todo, 'sort'>) => {
+		const todos = await listTodos(tx);
+		todos.sort((t1, t2) => t1.sort - t2.sort);
+
+		const maxSort = todos.pop()?.sort ?? 0;
+		await tx.set(`todo/${todo.id}`, { ...todo, sort: maxSort + 1 });
 	}
 };
