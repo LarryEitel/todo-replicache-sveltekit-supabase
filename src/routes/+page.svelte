@@ -3,6 +3,7 @@
 	import { Replicache } from 'replicache';
 	import { createClient } from '@supabase/supabase-js';
 	import type { M } from '$lib/replicache/mutators';
+	import docsCache from '../docs-cache.json';
 
 	const SUPABASE_URL = 'YOUR_SUPABASE_URL';
 	const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
@@ -10,6 +11,7 @@
 	let rep: Replicache<M>;
 	let count = 0;
 	let supabase: any;
+	let selectedDoc: string | null = null;
 
 	onMount(() => {
 		rep = new Replicache({
@@ -65,9 +67,25 @@
 		await rep.mutate.set(0);
 		await supabase.from('counter').update({ value: 0 }).eq('id', 1);
 	}
+
+	function selectDoc(filename: string) {
+		selectedDoc = docsCache.files[filename];
+	}
 </script>
 
 <h1>Replicache Counter with Supabase Realtime</h1>
+
+<h2>Cached Documentation</h2>
+<select on:change={(e) => selectDoc(e.target.value)}>
+	<option value="">Select a file</option>
+	{#each Object.keys(docsCache.files) as filename}
+		<option value={filename}>{filename}</option>
+	{/each}
+</select>
+
+{#if selectedDoc}
+	<pre>{selectedDoc}</pre>
+{/if}
 
 <div>
 	<button on:click={decrement}>-</button>
@@ -94,5 +112,18 @@
 	button {
 		font-size: 1.5rem;
 		padding: 0.5rem 1rem;
+	}
+
+	pre {
+		background-color: #f4f4f4;
+		border: 1px solid #ddd;
+		border-radius: 4px;
+		padding: 1rem;
+		white-space: pre-wrap;
+		word-wrap: break-word;
+	}
+
+	select {
+		margin-bottom: 1rem;
 	}
 </style>
