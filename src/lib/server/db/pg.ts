@@ -35,23 +35,36 @@ async function initPool() {
         });
         pool.on('connect', async (client) => {
             console.log('New client connected');
-            // eslint-disable-next-line @typescript-eslint/no-floating-promises
-            client.query('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+            try {
+                await client.query('SET SESSION CHARACTERISTICS AS TRANSACTION ISOLATION LEVEL SERIALIZABLE');
+            } catch (error) {
+                console.error('Error setting transaction isolation level:', error);
+            }
         });
 
         console.log('Attempting to create database schema');
-        await withExecutorAndPool(async (executor) => {
-            await transactWithExecutor(executor, async (executor) => {
-                console.log('Calling createDatabase function');
-                await createDatabase(executor, dbConfig);
-                console.log('Database schema created successfully');
-            });
-        }, pool);
+        try {
+            await withExecutorAndPool(async (executor) => {
+                await transactWithExecutor(executor, async (executor) => {
+                    console.log('Calling createDatabase function');
+                    await createDatabase(executor, dbConfig);
+                    console.log('Database schema created successfully');
+                });
+            }, pool);
+        } catch (schemaError) {
+            console.error('Error creating database schema:', schemaError);
+            throw schemaError;
+        }
 
         console.log('Pool initialization completed');
         return pool;
     } catch (error) {
         console.error('Error during pool initialization:', error);
+        if (error instanceof Error) {
+            console.error('Error name:', error.name);
+            console.error('Error message:', error.message);
+            console.error('Error stack:', error.stack);
+        }
         throw error;
     }
 }
@@ -75,6 +88,11 @@ async function withExecutorAndPool<R>(f: (executor: Executor) => R, p: Pool): Pr
         } catch (e) {
             console.error(`Error executing SQL: ${sql}`);
             console.error('Error details:', e);
+            if (e instanceof Error) {
+                console.error('Error name:', e.name);
+                console.error('Error message:', e.message);
+                console.error('Error stack:', e.stack);
+            }
             throw new Error(
                 // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 `Error executing SQL: ${sql}: ${(e as unknown as any).toString()}`
@@ -117,6 +135,11 @@ async function transactWithExecutor<R>(executor: Executor, body: TransactionBody
                 return r;
             } catch (e) {
                 console.log('Caught error in transaction, rolling back:', e);
+                if (e instanceof Error) {
+                    console.error('Error name:', e.name);
+                    console.error('Error message:', e.message);
+                    console.error('Error stack:', e.stack);
+                }
                 await executor('rollback');
                 throw e;
             }
@@ -126,6 +149,11 @@ async function transactWithExecutor<R>(executor: Executor, body: TransactionBody
                 continue;
             }
             console.error('Transaction failed, not retrying:', e);
+            if (e instanceof Error) {
+                console.error('Error name:', e.name);
+                console.error('Error message:', e.message);
+                console.error('Error stack:', e.stack);
+            }
             throw e;
         }
     }

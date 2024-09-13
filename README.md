@@ -16,6 +16,32 @@ Key areas of focus include:
 3. Leveraging Supabase's real-time capabilities alongside Replicache's offline-first approach.
 4. Exploring best practices for authentication and authorization in a Replicache + Supabase setup.
 
+## Replicache Documentation
+
+For a quick overview of Replicache concepts, features, and resources, please refer to the [Replicache Documentation Summary](docs/replicache_summary.md) in this repository. This summary provides essential information about:
+
+- Key features of Replicache
+- Core concepts (Mutations, Subscriptions, Synchronization)
+- Getting started guide
+- Additional resources and community links
+
+For more detailed information, visit the full [Replicache Documentation](https://doc.replicache.dev/).
+
+## Comprehensive Replicache Reference
+
+We have created a comprehensive Replicache reference document specifically for this project. You can find it at [docs/replicache_reference.md](docs/replicache_reference.md). This document includes:
+
+1. Detailed introduction to Replicache
+2. In-depth explanation of key features
+3. Comprehensive coverage of core concepts
+4. Step-by-step getting started guide
+5. API reference overview
+6. Advanced topics and strategies
+7. Examples and use cases
+8. Community and support information
+
+This reference document serves as a valuable resource for understanding Replicache in the context of this project and can be particularly helpful when working on the Supabase integration.
+
 ## Original Project Description
 
 This repository contains sample code for [Replicache](https://replicache.dev/). The example uses SvelteKit. The backend demonstrates implementations of `push`, `pull`, `poke`, `createSpace`, and `spaceExists` handlers, which are required for the Replicache sync protocol.

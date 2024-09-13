@@ -24,7 +24,13 @@ export async function createSchemaVersion1(executor: Executor) {
         await executor(`create table if not exists replicache_meta (key text primary key, value json)`);
         
         console.log('Inserting schema version');
-        await executor(`insert into replicache_meta (key, value) values ('schemaVersion', '1') on conflict (key) do update set value = '1'`);
+        await executor(`
+            insert into replicache_meta (key, value)
+            values ('schemaVersion', '1')
+            on conflict (key)
+            do update set value = '1'
+            where replicache_meta.value::text != '1'
+        `);
 
         console.log('Creating replicache_space table');
         await executor(`create table if not exists replicache_space (
