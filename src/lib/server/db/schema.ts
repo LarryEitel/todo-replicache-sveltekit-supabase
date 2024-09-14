@@ -108,6 +108,24 @@ export async function createSchemaVersion1(executor: Executor) {
 
         // Here we enable the supabase realtime api and monitor updates to the
         // replicache_space table.
+
+
+
+        /*
+            Replica identity is a PostgreSQL feature that determines how UPDATE and DELETE operations are logged for logical replication. It specifies which columns are used to identify rows when replicating changes. There are four modes:
+            DEFAULT: Uses the primary key (if any).
+            USING INDEX: Uses a specified index.
+            FULL: Includes all columns in the OLD row image.
+            NOTHING: Doesn't log any information for identifying rows.
+            By setting it to FULL, you're telling PostgreSQL to include all columns in the OLD row image when logging updates or deletes. This means:
+                    For UPDATE operations, both the old and new values of all columns will be logged.
+                    For DELETE operations, all column values of the deleted row will be logged.
+            This setting is particularly useful when:
+            You don't have a primary key on the table.
+            You want to ensure that all data changes are captured accurately for replication, even if it means using more storage and potentially impacting performance.
+         */
+        await executor.none(`ALTER TABLE replicache_entry REPLICA IDENTITY FULL`);
+        
         await executor.none(`alter publication supabase_realtime
     add table replicache_space`);
         await executor.none(`alter publication supabase_realtime set
