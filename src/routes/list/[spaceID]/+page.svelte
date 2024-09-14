@@ -1,112 +1,160 @@
+<!-- +page.svelte -->
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { Replicache } from 'replicache';
-	import { nanoid } from 'nanoid';
-	import { source } from 'sveltekit-sse';
-	import { mutators, type M } from '$lib/replicache/mutators';
-	import { page } from '$app/stores';
-	import { listTodos } from '$lib/replicache/todo';
-	import type { Todo } from '$lib/replicache/todo';
-	import { createClient } from "@supabase/supabase-js";
+  import { onMount } from 'svelte';
+  import { Replicache } from 'replicache';
+  import { nanoid } from 'nanoid';
+  import { mutators, type M } from '$lib/replicache/mutators';
+  import { page } from '$app/stores';
+  import { listTodos } from '$lib/replicache/todo';
+  import type { Todo } from '$lib/replicache/todo';
+  import { supabase } from '$lib/supabaseClient'; // Import the singleton client
+  import TodoMVC from '$lib/components/TodoMVC.svelte';
+  // import { testRealtime } from '$lib/testSupabaseRealtime';
 
-	import TodoMVC from '$lib/components/TodoMVC.svelte';
+  const { spaceID } = $page.params;
+  let repl: Replicache<M>;
+  let _list: Todo[] = [];
+  let areAllChangesSaved = true;
 
-	const { spaceID } = $page.params;
-	let repl: Replicache<M>;
-	let _list: Todo[] = [];
-	let areAllChangesSaved = true;
+  onMount(() => {
+    // testRealtime();
 
-	onMount(() => {
-		repl = initReplicache(spaceID);
-		repl.subscribe(listTodos, (data) => {
-			_list = data;
-			_list.sort((a: Todo, b: Todo) => a.sort - b.sort);
-		});
-		// Implements a Replicache poke using Server-Sent Events.
-		// If a "poke" message is received, it will pull from the server.
-		const connection = source(`/api/replicache/${spaceID}/poke`);
-		const sseStore = connection.select('poke').transform(() => {
-			console.log('poked! pulling fresh data for spaceID', spaceID);
-			repl.pull();
-		});
-		// The line below are kinda dumb, it prevents Svelte from removing this store at compile time (since it has not subscribers)
-		const unsubscribe = sseStore.subscribe(() => {});
+    // console.log(`[onMount] Initializing Replicache for spaceID: ${spaceID}`);
 
-		// This allows us to show the user whether all their local data is saved on the server
-		repl.onSync = async () => {
-			areAllChangesSaved = (await repl.experimentalPendingMutations()).length === 0;
-		};
+    try {
+      repl = initReplicache(spaceID);
+    } catch (error) {
+      console.error('[Replicache Initialization Error]', error);
+      return; // Exit early if initialization fails
+    }
 
-    const unlisten = listen(async () => repl.pull());
+    // Subscribe to Replicache's listTodos
+    repl.subscribe(listTodos, (data) => {
+      // console.log('[Replicache] listTodos subscription received data:', data);
+      _list = data;
+      _list.sort((a: Todo, b: Todo) => a.sort - b.sort);
+    });
 
-		// cleanup
-		return () => {
-			repl.close();
-			unsubscribe();
-			connection.close();
-      unlisten();
-		};
-
-	});
-
-	function initReplicache(spaceID: string) {
-		const licenseKey = import.meta.env.VITE_REPLICACHE_LICENSE_KEY;
-		if (!licenseKey) {
-			throw new Error('Missing VITE_REPLICACHE_LICENSE_KEY');
-		}
-		return new Replicache({
-			licenseKey,
-			pushURL: `/api/replicache/${spaceID}/push`,
-			pullURL: `/api/replicache/${spaceID}/pull`,
-			name: spaceID,
-			mutators
-		});
-	}
-
-	async function createTodo(text: string) {
-		await repl?.mutate.createTodo({
-			id: nanoid(),
-			text,
-			completed: false
-		});
-	}
-
-
-// Implements a Replicache poke using Supabase's realtime functionality.
-// See: backend/poke/supabase.ts.
-function listen(onPoke: () => Promise<void>) {
-  const supabase = createClient(
-		import.meta.env.VITE_SUPABASE_URL,
-		import.meta.env.VITE_SUPABASE_ANON_KEY
-	);
-
-  const subscriptionChannel = supabase.channel("public:replicache_space");
-  subscriptionChannel
-    .on(
-      "postgres_changes",
-      {
-        event: "*",
-        schema: "public",
-        table: "replicache_space",
-      },
-      () => {
-        void onPoke();
+    // Listen for Supabase Realtime events
+    console.log('[onMount] Setting up Supabase Realtime listener');
+    const unlisten = listen(async () => {
+      console.log('[Supabase Realtime] Poke received, triggering Replicache pull');
+      try {
+        await repl.pull();
+        console.log('[Replicache] Pull completed successfully');
+      } catch (error) {
+        console.error('[Replicache Pull Error]', error);
       }
-    )
-    .subscribe();
-  return () => {
-    void supabase.removeChannel(subscriptionChannel);
-  };
-}
+    });
 
+    // Show sync status
+    repl.onSync = async () => {
+      try {
+        const pending = await repl.experimentalPendingMutations();
+        areAllChangesSaved = pending.length === 0;
+        // console.log(`[Replicache] Sync status updated: ${areAllChangesSaved ? 'All Data Saved' : 'Sync Pending'}`);
+      } catch (error) {
+        console.error('[Replicache onSync Error]', error);
+      }
+    };
+
+    // Handle Replicache errors
+    repl.onError = (err) => {
+      console.error('[Replicache Error]', err);
+    };
+
+    // Cleanup on component unmount
+    return () => {
+      console.log('[onMount] Cleanup: Closing Replicache and unsubscribing Supabase Realtime');
+      repl.close();
+      unlisten();
+    };
+  });
+
+  /**
+   * Initializes Replicache with the provided spaceID.
+   * @param {string} spaceID - The unique identifier for the Replicache instance.
+   * @returns {Replicache<M>} - The initialized Replicache instance.
+   */
+  function initReplicache(spaceID: string) {
+    const licenseKey = import.meta.env.VITE_REPLICACHE_LICENSE_KEY;
+    if (!licenseKey) {
+      throw new Error('Missing VITE_REPLICACHE_LICENSE_KEY');
+    }
+
+    // console.log('[initReplicache] Creating Replicache instance with spaceID:', spaceID);
+    return new Replicache({
+      licenseKey,
+      pushURL: `/api/replicache/${spaceID}/push`,
+      pullURL: `/api/replicache/${spaceID}/pull`,
+      name: spaceID,
+      mutators,
+      // Optionally, enable Replicache debugging
+      // logLevel: 'debug', // Uncomment if Replicache supports logLevel
+    });
+  }
+
+  /**
+   * Creates a new todo item.
+   * @param {string} text - The text of the todo item.
+   */
+  async function createTodo(text: string) {
+    // console.log('[createTodo] Creating todo with text:', text);
+    try {
+      await repl?.mutate.createTodo({
+        id: nanoid(),
+        text,
+        completed: false,
+      });
+      console.log('[createTodo] Todo created successfully');
+    } catch (error) {
+      console.error('[createTodo Error]', error);
+    }
+  }
+
+  /**
+   * Sets up a Supabase Realtime listener for changes on the replicache_space table.
+   * @param {() => Promise<void>} onPoke - The callback to invoke when a change is detected.
+   * @returns {() => void} - A cleanup function to remove the subscription.
+   */
+  function listen(onPoke: () => Promise<void>) {
+    console.log('[listen] Subscribing to Supabase Realtime channel');
+
+    const subscription = supabase
+      .channel('schema-db-changes')
+      .on(
+        'postgres_changes',
+        {
+          event: '*', // Listen to all events (INSERT, UPDATE, DELETE)
+          schema: 'public',
+          table: 'replicache_space',
+        },
+        (payload) => {
+          console.log('[Supabase Realtime] Event received:', payload);
+          onPoke();
+        }
+      )
+      .subscribe((status) => {
+        if (status === 'SUBSCRIBED') {
+          console.log('[Supabase Realtime] Subscription successful');
+        } else if (status === 'ERROR') {
+          console.error('[Supabase Realtime] Subscription error:', status);
+        }
+      });
+
+    return () => {
+      console.log('[listen] Removing Supabase Realtime subscription');
+      supabase.removeChannel(subscription);
+    };
+  }
 </script>
 
 <p>{areAllChangesSaved ? 'All Data Saved' : 'Sync Pending'}</p>
 <section class="todoapp">
-	<TodoMVC
-		items={_list}
-		onCreateItem={createTodo}
-		onDeleteItem={(id) => repl.mutate.deleteTodo(id)}
-		onUpdateItem={(updatedTodo) => repl.mutate.updateTodo(updatedTodo)}
-	/>
+  <TodoMVC
+    items={_list}
+    onCreateItem={createTodo}
+    onDeleteItem={(id) => repl.mutate.deleteTodo(id)}
+    onUpdateItem={(updatedTodo) => repl.mutate.updateTodo(updatedTodo)}
+  />
 </section>

@@ -89,6 +89,33 @@ export async function createSchemaVersion1(executor: Executor) {
         await executor(`CREATE INDEX IF NOT EXISTS replicache_entry_version_idx ON replicache_entry (version)`);
         await executor(`CREATE INDEX IF NOT EXISTS replicache_client_clientgroupid_version_idx ON replicache_client (clientgroupid,version)`);
 
+        // We are going to be using the supabase realtime api from the client to
+        // receive pokes. This requires js access to db. We use RLS to restrict this
+        // access to only what is needed: read access to the space table. All this
+        // gives JS is the version of the space which is harmless. Everything else is
+        // auth'd through cookie auth using normal web application patterns.
+        await executor.none(`alter table replicache_meta enable row level security`);
+        await executor.none(`alter table replicache_entry enable row level security`);
+        await executor.none(`alter table replicache_client enable row level security`);
+
+        // this needs adjusted when we have auth
+        await executor.none(`alter table replicache_space enable row level security`);
+        await executor.none(`DROP POLICY IF EXISTS anon_read_replicache_space ON public.replicache_space`);
+        await executor.none(`DROP POLICY IF EXISTS allow_all ON public.replicache_space`);
+
+        // Do not leave RLS disabled in production environments.
+        // Re-Enabling RLS: Once you've completed your debugging, re-enable RLS to restore your security posture.
+
+        await executor.none(`ALTER TABLE public.replicache_space ENABLE ROW LEVEL SECURITY`);
+        await executor.none(`CREATE POLICY anon_read_replicache_space ON public.replicache_space FOR SELECT USING (true)`);
+
+        // Here we enable the supabase realtime api and monitor updates to the
+        // replicache_space table.
+        await executor.none(`alter publication supabase_realtime
+    add table replicache_space`);
+        await executor.none(`alter publication supabase_realtime set
+    (publish = 'update');`);
+
         // Update schema version
         await executor(`
             UPDATE schema_version
