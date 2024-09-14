@@ -8,8 +8,8 @@
 - [x] Delete a todo
 
 ## Phase 2: Real-time Collaboration
-- [ ] Implement real-time syncing across devices
-- [ ] Enable multiple users to interact simultaneously
+- [x] Implement real-time syncing across devices
+- [x] Enable multiple users to interact simultaneously
 - [ ] Implement automatic conflict resolution
 
 ## Phase 3: Offline Support
