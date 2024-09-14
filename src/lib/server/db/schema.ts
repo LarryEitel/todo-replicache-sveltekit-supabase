@@ -94,27 +94,24 @@ export async function createSchemaVersion1(executor: Executor) {
         // access to only what is needed: read access to the space table. All this
         // gives JS is the version of the space which is harmless. Everything else is
         // auth'd through cookie auth using normal web application patterns.
-        await executor.none(`alter table replicache_meta enable row level security`);
-        await executor.none(`alter table replicache_entry enable row level security`);
-        await executor.none(`alter table replicache_client enable row level security`);
 
         // this needs adjusted when we have auth
-        await executor.none(`alter table replicache_space enable row level security`);
-        await executor.none(`DROP POLICY IF EXISTS anon_read_replicache_space ON public.replicache_space`);
-        await executor.none(`DROP POLICY IF EXISTS allow_all ON public.replicache_space`);
+        // await executor.none(`alter table replicache_meta enable row level security`);
+        // await executor.none(`alter table replicache_entry enable row level security`);
+        // await executor.none(`alter table replicache_client enable row level security`);
+        // await executor.none(`alter table replicache_space enable row level security`);
+        // await executor.none(`CREATE POLICY anon_read_replicache_space ON public.replicache_space FOR SELECT USING (true)`);
 
         // Do not leave RLS disabled in production environments.
         // Re-Enabling RLS: Once you've completed your debugging, re-enable RLS to restore your security posture.
 
-        await executor.none(`ALTER TABLE public.replicache_space ENABLE ROW LEVEL SECURITY`);
-        await executor.none(`CREATE POLICY anon_read_replicache_space ON public.replicache_space FOR SELECT USING (true)`);
 
         // Here we enable the supabase realtime api and monitor updates to the
         // replicache_space table.
         await executor.none(`alter publication supabase_realtime
     add table replicache_space`);
         await executor.none(`alter publication supabase_realtime set
-    (publish = 'update');`);
+    (publish = 'all');`);
 
         // Update schema version
         await executor(`
